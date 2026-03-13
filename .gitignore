@@ -11,4 +11,4 @@ wheels/
 
 # User-files / tests
 .env
-test_*
+test_*.py
