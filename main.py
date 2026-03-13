@@ -19,40 +19,50 @@ def main():
     
     client = genai.Client(api_key=api_key)
     messages = [types.Content(role="user", parts=[types.Part(text=args.user_prompt)])]
-
-    response = client.models.generate_content(model='gemini-2.5-flash',
-                                              contents=messages,
-                                              config=types.GenerateContentConfig(tools=[available_functions],
-                                                                                 system_instruction=SYSTEM_PROMPT,
-                                                                                 temperature=0))
     
-    if response.usage_metadata == None:
-        raise RuntimeError("No response given. Failed API request.")
+    for _ in range(20):
+        response = client.models.generate_content(model='gemini-2.5-flash',
+                                                contents=messages,
+                                                config=types.GenerateContentConfig(tools=[available_functions],
+                                                                                    system_instruction=SYSTEM_PROMPT,
+                                                                                    temperature=0))
+        
+        if response.usage_metadata == None:
+            raise RuntimeError("No response given. Failed API request.")
+        
+        # adding candidates content to messages list
+        if response.candidates:
+            for can in response.candidates:
+                messages.append(can.content) # type: ignore
 
-    if args.verbose:
-          print(f"User prompt: {args.user_prompt}")
-          print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}\nResponse tokens: {response.usage_metadata.candidates_token_count}")
+        if args.verbose:
+            print(f"User prompt: {args.user_prompt}")
+            print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}\nResponse tokens: {response.usage_metadata.candidates_token_count}")
 
-    if response.function_calls:
-        results = []
-        for call in response.function_calls:
-            result = call_function(call, args.verbose)
+        if response.function_calls:
+            results = []
+            for call in response.function_calls:
+                result = call_function(call, args.verbose)
 
-            if not result.parts:
-                raise Exception("Error: no parts returned on call_function")
-            if result.parts[0].function_response == None:
-                raise Exception("Error: call_function response is None rather than FunctionResponse")
-            if result.parts[0].function_response.response == None:
-                raise Exception("Error: Call function provided no response")
-            
-            results.append(result.parts[0])
+                if not result.parts:
+                    raise Exception("Error: no parts returned on call_function")
+                if result.parts[0].function_response == None:
+                    raise Exception("Error: call_function response is None rather than FunctionResponse")
+                if result.parts[0].function_response.response == None:
+                    raise Exception("Error: Call function provided no response")
+                
+                results.append(result.parts[0])
 
-            if args.verbose:
-                print(f"-> {result.parts[0].function_response.response}")
-            
-            #print(f"Calling function: {call.name}({call.args})")
-    else:
-        print(response.text)
+                if args.verbose:
+                    print(f"-> {result.parts[0].function_response.response}")
 
+            # adding function_call responses to messages list
+            messages.append(types.Content(role="user", parts=results))
+        else:
+            print(response.text)
+            return 0
+
+    print("Problem not solved within specified iterations")
+    exit(1)
 if __name__ == "__main__":
     main()
